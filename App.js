@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Alert, Linking } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
 import * as Speech from 'expo-speech';
@@ -21,6 +21,33 @@ export default function App() {
     (async () => {
       await MediaLibrary.requestPermissionsAsync();
       await Audio.requestPermissionsAsync();
+      
+      // Check if TTS is available
+      const isAvailable = await Speech.getAvailableVoicesAsync();
+      console.log('TTS voices available:', isAvailable.length);
+      
+      // Test TTS on app start with platform-specific settings
+      const ttsOptions = {
+        language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+        pitch: 1,
+        rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+        onDone: () => console.log('TTS test completed'),
+        onError: (error) => {
+          console.error('TTS initialization error:', error);
+          Alert.alert(
+            'Speech Not Available',
+            'Text-to-speech may not work on this device. The app will continue to function without voice announcements.',
+            [{ text: 'OK' }]
+          );
+        },
+      };
+      
+      if (Platform.OS === 'android') {
+        // Android-specific TTS settings
+        ttsOptions.voice = 'en-us-x-sfg-local';
+      }
+      
+      Speech.speak('AutoSnap ready', ttsOptions);
     })();
   }, []);
 
@@ -28,23 +55,38 @@ export default function App() {
   useEffect(() => {
     let timer = null;
     if (isRunning && countdown > 0) {
-      // Speak the countdown number
-      Speech.speak(String(countdown), {
-        language: 'en',
+      // Platform-specific TTS options
+      const ttsOptions = {
+        language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
         pitch: 1,
-        rate: 0.9,
-      });
+        rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+        onDone: () => console.log(`Spoke: ${countdown}`),
+        onError: (error) => {
+          console.error('TTS countdown error:', error);
+          // Don't show alert repeatedly, just log the error
+        },
+      };
+      
+      // Stop any ongoing speech before speaking new number
+      Speech.stop();
+      Speech.speak(String(countdown), ttsOptions);
       
       timer = setTimeout(() => {
         setCountdown(countdown - 1);
       }, 1000);
     } else if (isRunning && countdown === 0) {
-      // Say "Cheese" and take picture/start recording
-      Speech.speak('Cheese!', {
-        language: 'en',
+      // Say different messages for photo vs video
+      const message = mode === 'photo' ? 'Cheese!' : 'Recording!';
+      const actionTtsOptions = {
+        language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
         pitch: 1.2,
-        rate: 1,
-      });
+        rate: Platform.OS === 'ios' ? 0.6 : 1,
+        onDone: () => console.log(`Spoke: ${message}`),
+        onError: (error) => console.error('TTS action error:', error),
+      };
+      
+      Speech.stop();
+      Speech.speak(message, actionTtsOptions);
       
       if (mode === 'photo') {
         takePicture();
@@ -69,10 +111,22 @@ export default function App() {
         const photo = await cameraRef.current.takePictureAsync();
         const asset = await MediaLibrary.saveToLibraryAsync(photo.uri);
         setLastMediaUri(asset.uri);
-        Speech.speak('Photo captured');
+        const ttsOptions = {
+          language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+          rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+          onError: (error) => console.error('TTS photo error:', error),
+        };
+        Speech.stop();
+        Speech.speak('Photo captured', ttsOptions);
       } catch (error) {
         console.log('Error taking picture:', error);
-        Speech.speak('Failed to capture photo');
+        const ttsOptions = {
+          language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+          rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+          onError: (error) => console.error('TTS error message:', error),
+        };
+        Speech.stop();
+        Speech.speak('Failed to capture photo', ttsOptions);
       }
     }
   };
@@ -84,10 +138,22 @@ export default function App() {
         const video = await cameraRef.current.recordAsync();
         const asset = await MediaLibrary.saveToLibraryAsync(video.uri);
         setLastMediaUri(asset.uri);
-        Speech.speak('Video saved');
+        const ttsOptions = {
+          language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+          rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+          onError: (error) => console.error('TTS video saved error:', error),
+        };
+        Speech.stop();
+        Speech.speak('Video saved', ttsOptions);
       } catch (error) {
         console.log('Error recording video:', error);
-        Speech.speak('Failed to record video');
+        const ttsOptions = {
+          language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+          rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+          onError: (error) => console.error('TTS video error:', error),
+        };
+        Speech.stop();
+        Speech.speak('Failed to record video', ttsOptions);
         setIsRecording(false);
       }
     }
@@ -117,21 +183,45 @@ export default function App() {
         });
         
         if (assets.length > 0) {
-          Speech.speak('Opening gallery');
+          const ttsOptions = {
+            language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+            rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+            onError: (error) => console.error('TTS gallery error:', error),
+          };
+          Speech.stop();
+          Speech.speak('Opening gallery', ttsOptions);
           // This will open the default gallery app
           Alert.alert('View Media', 'Please check your gallery app for the latest media.');
         } else {
-          Speech.speak('No media found');
+          const ttsOptions = {
+            language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+            rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+            onError: (error) => console.error('TTS no media error:', error),
+          };
+          Speech.stop();
+          Speech.speak('No media found', ttsOptions);
         }
       }
     } else {
-      Speech.speak('No recent media to view');
+      const ttsOptions = {
+        language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+        rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+        onError: (error) => console.error('TTS no recent media error:', error),
+      };
+      Speech.stop();
+      Speech.speak('No recent media to view', ttsOptions);
     }
   };
 
   const handleQuickTimer = (seconds) => {
     setSelectedSeconds(seconds);
-    Speech.speak(`Timer set to ${seconds} seconds`);
+    const ttsOptions = {
+      language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+      rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+      onError: (error) => console.error('TTS timer error:', error),
+    };
+    Speech.stop();
+    Speech.speak(`Timer set to ${seconds} seconds`, ttsOptions);
     setTimeout(() => startCountdown(), 500);
   };
 
@@ -162,44 +252,45 @@ export default function App() {
         ref={cameraRef}
         mode={mode}
       >
-        {/* Top Controls Bar */}
-        <View style={styles.topBar}>
+        {/* Top Header */}
+        <View style={styles.topHeader}>
+          <Text style={styles.appTitle}>AutoSnap</Text>
           <TouchableOpacity
-            style={styles.topButton}
+            style={styles.flipButton}
             onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
           >
-            <Ionicons name="camera-reverse" size={28} color="white" />
+            <Ionicons name="camera-reverse-outline" size={24} color="white" />
           </TouchableOpacity>
+        </View>
 
-          {/* Mode Switcher */}
-          <View style={styles.modeSwitcher}>
-            <TouchableOpacity
-              style={[styles.modeButton, mode === 'photo' && styles.modeActive]}
-              onPress={() => setMode('photo')}
-            >
-              <Text style={[styles.modeText, mode === 'photo' && styles.modeTextActive]}>
-                PHOTO
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modeButton, mode === 'video' && styles.modeActive]}
-              onPress={() => setMode('video')}
-            >
-              <Text style={[styles.modeText, mode === 'video' && styles.modeTextActive]}>
-                VIDEO
-              </Text>
-            </TouchableOpacity>
-          </View>
-
+        {/* Mode Selector - Bottom Position */}
+        <View style={styles.modeContainer}>
           <TouchableOpacity
-            style={styles.topButton}
-            onPress={() => Alert.alert(
-              'Voice Commands', 
-              'Voice commands coming soon!\n\nFor now, use the timer buttons below.',
-              [{ text: 'OK' }]
-            )}
+            style={[styles.modeTab, mode === 'photo' && styles.modeTabActive]}
+            onPress={() => setMode('photo')}
           >
-            <Ionicons name="mic-outline" size={28} color="white" />
+            <Ionicons 
+              name="camera" 
+              size={24} 
+              color={mode === 'photo' ? '#1e90ff' : 'rgba(255,255,255,0.6)'} 
+            />
+            <Text style={[styles.modeTabText, mode === 'photo' && styles.modeTabTextActive]}>
+              Photo
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.modeTab, mode === 'video' && styles.modeTabActive]}
+            onPress={() => setMode('video')}
+          >
+            <Ionicons 
+              name="videocam" 
+              size={24} 
+              color={mode === 'video' ? '#1e90ff' : 'rgba(255,255,255,0.6)'} 
+            />
+            <Text style={[styles.modeTabText, mode === 'video' && styles.modeTabTextActive]}>
+              Video
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -221,31 +312,29 @@ export default function App() {
       
       {/* Bottom Controls */}
       <View style={styles.bottomControls}>
-        {/* Timer Options */}
-        {mode === 'photo' && (
-          <View style={styles.timerOptions}>
-            <Text style={styles.timerLabel}>Timer:</Text>
-            {[3, 5, 10, 20].map((sec) => (
-              <TouchableOpacity
-                key={sec}
-                style={[
-                  styles.timerButton,
-                  selectedSeconds === sec && styles.timerButtonSelected,
-                ]}
-                onPress={() => setSelectedSeconds(sec)}
-                onLongPress={() => handleQuickTimer(sec)}
-                disabled={isRunning || isRecording}
-              >
-                <Text style={[
-                  styles.timerText,
-                  selectedSeconds === sec && styles.timerTextSelected
-                ]}>
-                  {sec}s
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+        {/* Timer Options - Available for both photo and video modes */}
+        <View style={styles.timerOptions}>
+          <Text style={styles.timerLabel}>Timer:</Text>
+          {[3, 5, 10, 20].map((sec) => (
+            <TouchableOpacity
+              key={sec}
+              style={[
+                styles.timerButton,
+                selectedSeconds === sec && styles.timerButtonSelected,
+              ]}
+              onPress={() => setSelectedSeconds(sec)}
+              onLongPress={() => handleQuickTimer(sec)}
+              disabled={isRunning || isRecording}
+            >
+              <Text style={[
+                styles.timerText,
+                selectedSeconds === sec && styles.timerTextSelected
+              ]}>
+                {sec}s
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* Main Action Buttons */}
         <View style={styles.actionButtons}>
@@ -270,13 +359,18 @@ export default function App() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.captureButton, styles.videoButton]}
+              style={[styles.captureButton, styles.videoButton, isRunning && styles.disabled]}
               onPress={isRecording ? stopVideoRecording : startCountdown}
+              disabled={isRunning}
             >
               <View style={[
                 styles.videoButtonInner,
                 isRecording && styles.videoButtonRecording
-              ]} />
+              ]}>
+                {isRunning && !isRecording && (
+                  <Text style={styles.videoCountdown}>{countdown}</Text>
+                )}
+              </View>
             </TouchableOpacity>
           )}
 
@@ -321,40 +415,58 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
-  topBar: {
+  topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 50,
     paddingHorizontal: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingBottom: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
   },
-  topButton: {
-    padding: 10,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 25,
+  appTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1e90ff',
+    letterSpacing: 1,
   },
-  modeSwitcher: {
+  flipButton: {
+    padding: 12,
+    backgroundColor: 'rgba(30,144,255,0.2)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(30,144,255,0.5)',
+  },
+  modeContainer: {
+    position: 'absolute',
+    bottom: 180,
+    alignSelf: 'center',
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
-    padding: 2,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    borderRadius: 30,
+    padding: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
-  modeButton: {
-    paddingVertical: 8,
+  modeTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 18,
+    borderRadius: 25,
+    marginHorizontal: 2,
   },
-  modeActive: {
-    backgroundColor: 'white',
+  modeTabActive: {
+    backgroundColor: 'rgba(30,144,255,0.3)',
   },
-  modeText: {
-    color: 'white',
+  modeTabText: {
+    color: 'rgba(255,255,255,0.6)',
     fontSize: 14,
     fontWeight: '600',
+    marginLeft: 6,
   },
-  modeTextActive: {
-    color: 'black',
+  modeTabTextActive: {
+    color: '#1e90ff',
   },
   countdownOverlay: {
     position: 'absolute',
@@ -364,15 +476,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   countdownDisplayLarge: {
-    fontSize: 120,
-    color: 'white',
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0,0,0,0.75)',
-    textShadowOffset: { width: -2, height: 2 },
-    textShadowRadius: 10,
+    fontSize: 160,
+    color: '#1e90ff',
+    fontWeight: '900',
+    textShadowColor: 'rgba(30,144,255,0.8)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 30,
   },
   recordingIndicator: {
     position: 'absolute',
@@ -398,9 +510,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bottomControls: {
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(10,10,10,0.95)',
     paddingBottom: 30,
     paddingTop: 20,
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(30,144,255,0.3)',
   },
   timerOptions: {
     flexDirection: 'row',
@@ -408,31 +524,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     paddingHorizontal: 20,
+    backgroundColor: 'rgba(30,144,255,0.1)',
+    marginHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
   timerLabel: {
-    color: 'white',
+    color: '#1e90ff',
     fontSize: 16,
     marginRight: 10,
+    fontWeight: '600',
   },
   timerButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginHorizontal: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginHorizontal: 4,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   timerButtonSelected: {
     backgroundColor: '#1e90ff',
     borderColor: '#1e90ff',
+    transform: [{ scale: 1.1 }],
   },
   timerText: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.6)',
     fontSize: 14,
+    fontWeight: '500',
   },
   timerTextSelected: {
     color: 'white',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   actionButtons: {
     flexDirection: 'row',
@@ -441,43 +565,56 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   galleryButton: {
-    padding: 10,
+    padding: 12,
+    backgroundColor: 'rgba(30,144,255,0.1)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(30,144,255,0.3)',
   },
   captureButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: 'white',
-    padding: 3,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(30,144,255,0.2)',
+    padding: 4,
+    borderWidth: 3,
+    borderColor: '#1e90ff',
   },
   captureButtonInner: {
     flex: 1,
-    borderRadius: 32,
-    backgroundColor: 'white',
-    borderWidth: 2,
-    borderColor: 'black',
+    borderRadius: 35,
+    backgroundColor: '#1e90ff',
     justifyContent: 'center',
     alignItems: 'center',
   },
   captureCountdown: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
-    color: 'black',
+    color: 'white',
   },
   videoButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(255,0,0,0.1)',
     borderWidth: 3,
-    borderColor: 'white',
+    borderColor: '#ff4444',
   },
   videoButtonInner: {
     flex: 1,
-    margin: 5,
-    borderRadius: 25,
-    backgroundColor: 'red',
+    margin: 8,
+    borderRadius: 30,
+    backgroundColor: '#ff4444',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   videoButtonRecording: {
     backgroundColor: 'white',
-    borderRadius: 5,
+    borderRadius: 10,
+    margin: 12,
+  },
+  videoCountdown: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
   },
   quickActionButton: {
     padding: 10,
