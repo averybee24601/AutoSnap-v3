@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Alert, Linking, Platform, AppState } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
+ 
 import { Ionicons } from '@expo/vector-icons';
 
 export default function App() {
@@ -17,38 +18,59 @@ export default function App() {
   const [lastMediaUri, setLastMediaUri] = useState(null);
   const cameraRef = useRef(null);
 
+  // Initialize TTS every time component mounts or app becomes active
   useEffect(() => {
-    (async () => {
-      await MediaLibrary.requestPermissionsAsync();
-      await Audio.requestPermissionsAsync();
-      
-      // Check if TTS is available
-      const isAvailable = await Speech.getAvailableVoicesAsync();
-      console.log('TTS voices available:', isAvailable.length);
-      
-      // Test TTS on app start with platform-specific settings
-      const ttsOptions = {
-        language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
-        pitch: 1,
-        rate: Platform.OS === 'ios' ? 0.5 : 0.8,
-        onDone: () => console.log('TTS test completed'),
-        onError: (error) => {
-          console.error('TTS initialization error:', error);
-          Alert.alert(
-            'Speech Not Available',
-            'Text-to-speech may not work on this device. The app will continue to function without voice announcements.',
-            [{ text: 'OK' }]
-          );
-        },
-      };
-      
-      if (Platform.OS === 'android') {
-        // Android-specific TTS settings
-        ttsOptions.voice = 'en-us-x-sfg-local';
+    const initializeTTS = async () => {
+      try {
+        await MediaLibrary.requestPermissionsAsync();
+        await Audio.requestPermissionsAsync();
+        
+        // Stop any existing speech
+        await Speech.stop();
+        
+        // Check if TTS is available
+        const isAvailable = await Speech.getAvailableVoicesAsync();
+        console.log('TTS voices available:', isAvailable.length);
+        
+        // Small delay to ensure TTS is ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Test TTS on app start with platform-specific settings
+        const ttsOptions = {
+          language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+          pitch: 1,
+          rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+          onDone: () => console.log('TTS test completed'),
+          onError: (error) => {
+            console.error('TTS initialization error:', error);
+            // Don't show alert on every initialization
+          },
+        };
+        
+        if (Platform.OS === 'android') {
+          // Don't specify voice on Android, let it use default
+          delete ttsOptions.voice;
+        }
+        
+        Speech.speak('AutoSnap ready', ttsOptions);
+      } catch (error) {
+        console.error('Error initializing TTS:', error);
       }
-      
-      Speech.speak('AutoSnap ready', ttsOptions);
-    })();
+    };
+
+    initializeTTS();
+
+    // Re-initialize TTS when app comes to foreground
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('App became active, reinitializing TTS');
+        initializeTTS();
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
   }, []);
 
   // Enhanced countdown with TTS
@@ -76,7 +98,7 @@ export default function App() {
       }, 1000);
     } else if (isRunning && countdown === 0) {
       // Say different messages for photo vs video
-      const message = mode === 'photo' ? 'Cheese!' : 'Recording!';
+      const message = mode === 'photo' ? 'Cheese!' : 'Video recording';
       const actionTtsOptions = {
         language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
         pitch: 1.2,
@@ -108,24 +130,42 @@ export default function App() {
   const takePicture = async () => {
     if (cameraRef.current && !isRecording) {
       try {
+        console.log('Taking picture...');
         const photo = await cameraRef.current.takePictureAsync();
-        const asset = await MediaLibrary.saveToLibraryAsync(photo.uri);
-        setLastMediaUri(asset.uri);
-        const ttsOptions = {
-          language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
-          rate: Platform.OS === 'ios' ? 0.5 : 0.8,
-          onError: (error) => console.error('TTS photo error:', error),
-        };
-        Speech.stop();
-        Speech.speak('Photo captured', ttsOptions);
+        console.log('Photo taken:', photo);
+        
+        if (photo && photo.uri) {
+          // Save to library with better error handling
+          try {
+            const asset = await MediaLibrary.saveToLibraryAsync(photo.uri);
+            setLastMediaUri(asset.uri);
+            console.log('Photo saved to library:', asset.uri);
+          } catch (saveError) {
+            console.warn('Could not save to media library:', saveError);
+            // Photo was still taken successfully, just couldn't save to library
+          }
+          
+          // Always announce success if photo was taken
+          const ttsOptions = {
+            language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+            rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+            pitch: 1.1,
+            onError: (error) => console.error('TTS photo success error:', error),
+          };
+          await Speech.stop();
+          Speech.speak('Photo captured. Looks great!', ttsOptions);
+        } else {
+          throw new Error('No photo URI returned');
+        }
       } catch (error) {
-        console.log('Error taking picture:', error);
+        console.error('Error in takePicture:', error);
+        // Only announce failure if photo capture actually failed
         const ttsOptions = {
           language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
           rate: Platform.OS === 'ios' ? 0.5 : 0.8,
           onError: (error) => console.error('TTS error message:', error),
         };
-        Speech.stop();
+        await Speech.stop();
         Speech.speak('Failed to capture photo', ttsOptions);
       }
     }
@@ -136,24 +176,36 @@ export default function App() {
       try {
         setIsRecording(true);
         const video = await cameraRef.current.recordAsync();
-        const asset = await MediaLibrary.saveToLibraryAsync(video.uri);
-        setLastMediaUri(asset.uri);
+
+        // Save to library with graceful handling
+        try {
+          const asset = await MediaLibrary.saveToLibraryAsync(video.uri);
+          setLastMediaUri(asset.uri);
+          console.log('Video saved to library:', asset.uri);
+        } catch (saveError) {
+          console.warn('Could not save video to media library:', saveError);
+          // Continue, as video capture succeeded
+        }
+
+        // Announce successful video capture regardless of save outcome
         const ttsOptions = {
           language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
           rate: Platform.OS === 'ios' ? 0.5 : 0.8,
-          onError: (error) => console.error('TTS video saved error:', error),
+          onError: (error) => console.error('TTS video success error:', error),
         };
         Speech.stop();
-        Speech.speak('Video saved', ttsOptions);
+        Speech.speak('Video captured', ttsOptions);
+        // Reset recording state after successful capture
+        setIsRecording(false);
       } catch (error) {
-        console.log('Error recording video:', error);
+        console.error('Error during video capture:', error);
         const ttsOptions = {
           language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
           rate: Platform.OS === 'ios' ? 0.5 : 0.8,
-          onError: (error) => console.error('TTS video error:', error),
+          onError: (error) => console.error('TTS video failure error:', error),
         };
         Speech.stop();
-        Speech.speak('Failed to record video', ttsOptions);
+        Speech.speak('Failed to capture video', ttsOptions);
         setIsRecording(false);
       }
     }
@@ -263,7 +315,25 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* Mode Selector - Bottom Position */}
+        {/* Countdown Display Overlay */}
+        {isRunning && countdown !== null && (
+          <View style={styles.countdownOverlay}>
+            <Text style={styles.countdownDisplayLarge}>{countdown}</Text>
+          </View>
+        )}
+
+        {/* Recording Indicator */}
+        {isRecording && (
+          <View style={styles.recordingIndicator}>
+            <View style={styles.recordingDot} />
+            <Text style={styles.recordingText}>Recording...</Text>
+          </View>
+        )}
+      </CameraView>
+      
+      {/* Bottom Controls */}
+      <View style={styles.bottomControls}>
+        {/* Mode Selector */}
         <View style={styles.modeContainer}>
           <TouchableOpacity
             style={[styles.modeTab, mode === 'photo' && styles.modeTabActive]}
@@ -294,24 +364,6 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* Countdown Display Overlay */}
-        {isRunning && countdown !== null && (
-          <View style={styles.countdownOverlay}>
-            <Text style={styles.countdownDisplayLarge}>{countdown}</Text>
-          </View>
-        )}
-
-        {/* Recording Indicator */}
-        {isRecording && (
-          <View style={styles.recordingIndicator}>
-            <View style={styles.recordingDot} />
-            <Text style={styles.recordingText}>Recording...</Text>
-          </View>
-        )}
-      </CameraView>
-      
-      {/* Bottom Controls */}
-      <View style={styles.bottomControls}>
         {/* Timer Options - Available for both photo and video modes */}
         <View style={styles.timerOptions}>
           <Text style={styles.timerLabel}>Timer:</Text>
@@ -336,16 +388,8 @@ export default function App() {
           ))}
         </View>
 
-        {/* Main Action Buttons */}
+        {/* Main Action Button - Center Only */}
         <View style={styles.actionButtons}>
-          {/* Gallery Button */}
-          <TouchableOpacity
-            style={styles.galleryButton}
-            onPress={viewLastMedia}
-          >
-            <Ionicons name="images-outline" size={30} color="white" />
-          </TouchableOpacity>
-
           {/* Capture/Record Button */}
           {mode === 'photo' ? (
             <TouchableOpacity
@@ -373,28 +417,6 @@ export default function App() {
               </View>
             </TouchableOpacity>
           )}
-
-          {/* Quick Actions */}
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={() => {
-              if (mode === 'photo') {
-                takePicture();
-              } else {
-                if (isRecording) {
-                  stopVideoRecording();
-                } else {
-                  startVideoRecording();
-                }
-              }
-            }}
-          >
-            <Ionicons 
-              name={mode === 'photo' ? "camera" : (isRecording ? "stop-circle" : "videocam")} 
-              size={30} 
-              color="white" 
-            />
-          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -438,15 +460,16 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(30,144,255,0.5)',
   },
   modeContainer: {
-    position: 'absolute',
-    bottom: 180,
-    alignSelf: 'center',
     flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.8)',
     borderRadius: 30,
     padding: 5,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+    marginBottom: 15,
+    marginHorizontal: 50,
   },
   modeTab: {
     flexDirection: 'row',
@@ -560,7 +583,7 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
   },
