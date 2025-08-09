@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Alert, Linking, Platform, AppState } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
 import * as Speech from 'expo-speech';
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
+import Slider from '@react-native-community/slider';
  
 import { Ionicons } from '@expo/vector-icons';
 
@@ -16,55 +17,228 @@ export default function App() {
   const [mode, setMode] = useState('photo'); // 'photo' or 'video'
   const [isRecording, setIsRecording] = useState(false);
   const [lastMediaUri, setLastMediaUri] = useState(null);
+  const [ttsVolume, setTtsVolume] = useState(1.0);
+  const [flashVisible, setFlashVisible] = useState(false);
+  const [ttsReady, setTtsReady] = useState(false);
+  const [showSilentModeWarning, setShowSilentModeWarning] = useState(false);
   const cameraRef = useRef(null);
+  const isPad = Platform.OS === 'ios' && Platform.isPad;
 
-  // Initialize TTS every time component mounts or app becomes active
+  const stopSpeaking = async () => {
+    try {
+      await Speech.stop();
+    } catch {}
+  };
+
+  // Direct speak function for initialization (no dependencies)
+  const speakDirect = (text, options = {}) => {
+    console.log(`speakDirect called with: "${text}"`);
+    try {
+      Speech.stop();
+      Speech.speak(text, {
+        language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+        pitch: 1,
+        rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+        volume: ttsVolume,
+        ...options,
+      });
+      console.log('Speech.speak called successfully');
+    } catch (error) {
+      console.error('Error in speakDirect:', error);
+    }
+  };
+
+  const speak = useCallback((text, options = {}) => {
+    console.log(`speak called, volume: ${ttsVolume}, text: "${text}"`);
+    if (ttsVolume === 0) {
+      console.log('TTS volume is 0, not speaking');
+      return;
+    }
+    try {
+      Speech.stop();
+      Speech.speak(text, {
+        language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+        pitch: 1,
+        rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+        volume: ttsVolume,
+        ...options,
+      });
+    } catch (error) {
+      console.error('Error in speak:', error);
+    }
+  }, [ttsVolume]);
+
+  // Track if this is the first app launch
+  const isFirstLaunch = useRef(true);
+  const hasSpokenWelcome = useRef(false);
+
+  // Initialize TTS system (no dependencies - runs once)
   useEffect(() => {
-    const initializeTTS = async () => {
+    const initializeTTSSystem = async () => {
+      console.log('Starting TTS system initialization...');
+      console.log('Platform:', Platform.OS, 'Version:', Platform.Version);
       try {
+        // Request permissions
+        console.log('Requesting permissions...');
         await MediaLibrary.requestPermissionsAsync();
-        await Audio.requestPermissionsAsync();
+        const audioPermission = await Audio.requestPermissionsAsync();
+        console.log('Audio permission status:', audioPermission.status);
+        
+        // Set audio mode with more comprehensive settings for iOS devices
+        console.log('Setting audio mode...');
+        try {
+          // Detect if we're on iPhone vs iPad
+          const isIPhone = Platform.OS === 'ios' && !Platform.isPad;
+          console.log('Device type:', isIPhone ? 'iPhone' : (Platform.isPad ? 'iPad' : 'Other'));
+          
+          if (Platform.OS === 'ios') {
+            // Try with safe numeric values that work across all iOS devices
+            const audioConfig = {
+              allowsRecordingIOS: false,
+              playsInSilentModeIOS: true,
+              staysActiveInBackground: true,
+              interruptionModeIOS: InterruptionModeIOS?.DoNotMix || 3, // Use constant or fallback to numeric
+              shouldDuckAndroid: false,
+              interruptionModeAndroid: InterruptionModeAndroid?.DoNotMix || 3,
+              playThroughEarpieceAndroid: false,
+            };
+            
+            console.log('Setting iOS audio mode with config:', audioConfig);
+            await Audio.setAudioModeAsync(audioConfig);
+          } else {
+            await Audio.setAudioModeAsync({
+              allowsRecordingIOS: false,
+              playsInSilentModeIOS: true,
+              staysActiveInBackground: false,
+              interruptionModeIOS: 1,
+              shouldDuckAndroid: true,
+              interruptionModeAndroid: 1,
+              playThroughEarpieceAndroid: false,
+            });
+          }
+          console.log('Audio mode set successfully');
+        } catch (audioModeErr) {
+          console.warn('Failed to set audio mode:', audioModeErr);
+          // Try multiple fallback configurations
+          const fallbackConfigs = [
+            { playsInSilentModeIOS: true, allowsRecordingIOS: false },
+            { playsInSilentModeIOS: true },
+            {} // Empty config as last resort
+          ];
+          
+          for (const config of fallbackConfigs) {
+            try {
+              console.log('Trying fallback config:', config);
+              await Audio.setAudioModeAsync(config);
+              console.log('Fallback audio mode set successfully');
+              break;
+            } catch (fallbackErr) {
+              console.warn('Fallback failed:', fallbackErr);
+            }
+          }
+        }
         
         // Stop any existing speech
         await Speech.stop();
         
         // Check if TTS is available
-        const isAvailable = await Speech.getAvailableVoicesAsync();
-        console.log('TTS voices available:', isAvailable.length);
+        const voices = await Speech.getAvailableVoicesAsync();
+        console.log('TTS voices available:', voices.length);
         
-        // Small delay to ensure TTS is ready
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Test TTS on app start with platform-specific settings
-        const ttsOptions = {
-          language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
-          pitch: 1,
-          rate: Platform.OS === 'ios' ? 0.5 : 0.8,
-          onDone: () => console.log('TTS test completed'),
-          onError: (error) => {
-            console.error('TTS initialization error:', error);
-            // Don't show alert on every initialization
-          },
-        };
-        
-        if (Platform.OS === 'android') {
-          // Don't specify voice on Android, let it use default
-          delete ttsOptions.voice;
+        // On iOS, we need to "prime" the audio system differently for iPhone vs iPad
+        if (Platform.OS === 'ios' && voices.length > 0) {
+          try {
+            console.log('Priming iOS audio system...');
+            // First attempt: speak empty string
+            await Speech.speak('', { 
+              volume: 0.01,
+              rate: 10,
+              onDone: () => console.log('Audio system primed (empty)'),
+              onError: (err) => console.log('Prime error (empty):', err)
+            });
+            
+            // Wait a bit
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Second attempt: speak a space with different settings
+            await Speech.speak(' ', { 
+              volume: 0.1,
+              rate: 1,
+              language: 'en-US',
+              onDone: () => console.log('Audio system primed (space)'),
+              onError: (err) => console.log('Prime error (space):', err)
+            });
+            
+            await Speech.stop();
+            console.log('Audio priming complete');
+          } catch (primeErr) {
+            console.log('Audio prime error:', primeErr);
+          }
         }
         
-        Speech.speak('AutoSnap ready', ttsOptions);
+        // Mark TTS as ready
+        setTtsReady(true);
+        console.log('TTS system initialization complete');
+        
       } catch (error) {
-        console.error('Error initializing TTS:', error);
+        console.error('Error initializing TTS system:', error);
       }
     };
 
-    initializeTTS();
+    initializeTTSSystem();
+  }, []); // No dependencies - runs once
 
-    // Re-initialize TTS when app comes to foreground
+  // Handle welcome message separately
+  useEffect(() => {
+    if (ttsReady && ttsVolume > 0 && !hasSpokenWelcome.current) {
+      hasSpokenWelcome.current = true;
+      console.log('TTS ready and volume > 0, speaking welcome message...');
+      
+      // Small delay to ensure everything is ready
+      setTimeout(() => {
+        const welcomeMessage = 'Welcome to AutoSnap. Set a timer using the buttons at the bottom, then press the capture button to start the countdown. I will count down and announce when your photo or video is captured.';
+        speakDirect(welcomeMessage, {
+          rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+          volume: ttsVolume,
+          onDone: () => console.log('Welcome message completed'),
+          onError: (error) => {
+            console.error('TTS welcome error:', error);
+            // Reset so it can try again on user interaction
+            hasSpokenWelcome.current = false;
+            // Check if silent mode might be the issue
+            if (Platform.OS === 'ios' && error.message?.includes('AVAudioSession')) {
+              setShowSilentModeWarning(true);
+            }
+          },
+        });
+      }, 1000);
+    }
+  }, [ttsReady, ttsVolume]);
+
+  // Fallback: Play welcome message on first user interaction if it hasn't played yet
+  const handleFirstInteraction = useCallback(() => {
+    if (ttsReady && ttsVolume > 0 && !hasSpokenWelcome.current) {
+      console.log('Playing welcome message on first interaction...');
+      hasSpokenWelcome.current = true;
+      const welcomeMessage = 'Welcome to AutoSnap. Set a timer using the buttons at the bottom, then press the capture button to start the countdown. I will count down and announce when your photo or video is captured.';
+      speakDirect(welcomeMessage, {
+        rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+        volume: ttsVolume,
+        onDone: () => console.log('Welcome message completed (interaction)'),
+        onError: (error) => {
+          console.error('TTS welcome error (interaction):', error);
+        },
+      });
+    }
+  }, [ttsReady, ttsVolume]);
+
+  // Re-initialize when app comes to foreground
+  useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
         console.log('App became active, reinitializing TTS');
-        initializeTTS();
+        setTtsReady(false);
+        setTimeout(() => setTtsReady(true), 500);
       }
     });
 
@@ -77,21 +251,13 @@ export default function App() {
   useEffect(() => {
     let timer = null;
     if (isRunning && countdown > 0) {
-      // Platform-specific TTS options
-      const ttsOptions = {
-        language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
-        pitch: 1,
-        rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+      // Speak countdown number if enabled
+      speak(String(countdown), {
         onDone: () => console.log(`Spoke: ${countdown}`),
         onError: (error) => {
           console.error('TTS countdown error:', error);
-          // Don't show alert repeatedly, just log the error
         },
-      };
-      
-      // Stop any ongoing speech before speaking new number
-      Speech.stop();
-      Speech.speak(String(countdown), ttsOptions);
+      });
       
       timer = setTimeout(() => {
         setCountdown(countdown - 1);
@@ -99,16 +265,12 @@ export default function App() {
     } else if (isRunning && countdown === 0) {
       // Say different messages for photo vs video
       const message = mode === 'photo' ? 'Cheese!' : 'Video recording';
-      const actionTtsOptions = {
-        language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+      speak(message, {
         pitch: 1.2,
         rate: Platform.OS === 'ios' ? 0.6 : 1,
         onDone: () => console.log(`Spoke: ${message}`),
         onError: (error) => console.error('TTS action error:', error),
-      };
-      
-      Speech.stop();
-      Speech.speak(message, actionTtsOptions);
+      });
       
       if (mode === 'photo') {
         takePicture();
@@ -119,18 +281,16 @@ export default function App() {
       setCountdown(null);
     }
     return () => clearTimeout(timer);
-  }, [isRunning, countdown, mode]);
+  }, [isRunning, countdown, mode, speak, takePicture, startVideoRecording]);
 
-  const startCountdown = () => {
-    if (isRunning || isRecording) return;
-    setCountdown(selectedSeconds);
-    setIsRunning(true);
-  };
-
-  const takePicture = async () => {
+  const takePicture = useCallback(async () => {
     if (cameraRef.current && !isRecording) {
       try {
         console.log('Taking picture...');
+        // Visual and audible snapshot indicators
+        setFlashVisible(true);
+        setTimeout(() => setFlashVisible(false), 140);
+        speak('Snap!', { rate: Platform.OS === 'ios' ? 0.55 : 0.95, pitch: 1.2 });
         const photo = await cameraRef.current.takePictureAsync();
         console.log('Photo taken:', photo);
         
@@ -145,33 +305,27 @@ export default function App() {
             // Photo was still taken successfully, just couldn't save to library
           }
           
-          // Always announce success if photo was taken
-          const ttsOptions = {
-            language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+          // Announce success if enabled
+          speak('Photo captured. Looks great!', {
             rate: Platform.OS === 'ios' ? 0.5 : 0.8,
             pitch: 1.1,
             onError: (error) => console.error('TTS photo success error:', error),
-          };
-          await Speech.stop();
-          Speech.speak('Photo captured. Looks great!', ttsOptions);
+          });
         } else {
           throw new Error('No photo URI returned');
         }
       } catch (error) {
         console.error('Error in takePicture:', error);
         // Only announce failure if photo capture actually failed
-        const ttsOptions = {
-          language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+        speak('Failed to capture photo', {
           rate: Platform.OS === 'ios' ? 0.5 : 0.8,
           onError: (error) => console.error('TTS error message:', error),
-        };
-        await Speech.stop();
-        Speech.speak('Failed to capture photo', ttsOptions);
+        });
       }
     }
-  };
+  }, [isRecording, speak]);
 
-  const startVideoRecording = async () => {
+  const startVideoRecording = useCallback(async () => {
     if (cameraRef.current && !isRecording) {
       try {
         setIsRecording(true);
@@ -188,27 +342,27 @@ export default function App() {
         }
 
         // Announce successful video capture regardless of save outcome
-        const ttsOptions = {
-          language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+        speak('Video captured', {
           rate: Platform.OS === 'ios' ? 0.5 : 0.8,
           onError: (error) => console.error('TTS video success error:', error),
-        };
-        Speech.stop();
-        Speech.speak('Video captured', ttsOptions);
+        });
         // Reset recording state after successful capture
         setIsRecording(false);
       } catch (error) {
         console.error('Error during video capture:', error);
-        const ttsOptions = {
-          language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+        speak('Failed to capture video', {
           rate: Platform.OS === 'ios' ? 0.5 : 0.8,
           onError: (error) => console.error('TTS video failure error:', error),
-        };
-        Speech.stop();
-        Speech.speak('Failed to capture video', ttsOptions);
+        });
         setIsRecording(false);
       }
     }
+  }, [isRecording, speak]);
+
+  const startCountdown = () => {
+    if (isRunning || isRecording) return;
+    setCountdown(selectedSeconds);
+    setIsRunning(true);
   };
 
   const stopVideoRecording = async () => {
@@ -235,45 +389,33 @@ export default function App() {
         });
         
         if (assets.length > 0) {
-          const ttsOptions = {
-            language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+          speak('Opening gallery', {
             rate: Platform.OS === 'ios' ? 0.5 : 0.8,
             onError: (error) => console.error('TTS gallery error:', error),
-          };
-          Speech.stop();
-          Speech.speak('Opening gallery', ttsOptions);
+          });
           // This will open the default gallery app
           Alert.alert('View Media', 'Please check your gallery app for the latest media.');
         } else {
-          const ttsOptions = {
-            language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+          speak('No media found', {
             rate: Platform.OS === 'ios' ? 0.5 : 0.8,
             onError: (error) => console.error('TTS no media error:', error),
-          };
-          Speech.stop();
-          Speech.speak('No media found', ttsOptions);
+          });
         }
       }
     } else {
-      const ttsOptions = {
-        language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+      speak('No recent media to view', {
         rate: Platform.OS === 'ios' ? 0.5 : 0.8,
         onError: (error) => console.error('TTS no recent media error:', error),
-      };
-      Speech.stop();
-      Speech.speak('No recent media to view', ttsOptions);
+      });
     }
   };
 
   const handleQuickTimer = (seconds) => {
     setSelectedSeconds(seconds);
-    const ttsOptions = {
-      language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+    speak(`Timer set to ${seconds} seconds`, {
       rate: Platform.OS === 'ios' ? 0.5 : 0.8,
       onError: (error) => console.error('TTS timer error:', error),
-    };
-    Speech.stop();
-    Speech.speak(`Timer set to ${seconds} seconds`, ttsOptions);
+    });
     setTimeout(() => startCountdown(), 500);
   };
 
@@ -305,21 +447,81 @@ export default function App() {
         mode={mode}
       >
         {/* Top Header */}
-        <View style={styles.topHeader}>
-          <Text style={styles.appTitle}>AutoSnap</Text>
-          <TouchableOpacity
-            style={styles.flipButton}
-            onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
-          >
-            <Ionicons name="camera-reverse-outline" size={24} color="white" />
-          </TouchableOpacity>
+        <View style={[styles.topHeader, isPad && styles.topHeaderPad]}>
+          <Text style={[styles.appTitle, isPad && styles.appTitlePad]}>AutoSnap</Text>
+          <View style={styles.topControls}>
+            <View style={[styles.volumeControl, isPad && styles.volumeControlPad]}>
+              <TouchableOpacity
+                onPress={() => {
+                  const newVolume = ttsVolume > 0 ? 0 : 1.0;
+                  setTtsVolume(newVolume);
+                  if (newVolume === 0) {
+                    stopSpeaking();
+                  }
+                  handleFirstInteraction();
+                }}
+                style={styles.volumeIcon}
+              >
+                <Ionicons 
+                  name={ttsVolume > 0 ? 'volume-high-outline' : 'volume-mute-outline'} 
+                  size={isPad ? 20 : 24} 
+                  color={ttsVolume > 0 ? '#1e90ff' : 'rgba(255,255,255,0.6)'} 
+                />
+              </TouchableOpacity>
+              <Slider
+                style={[styles.volumeSlider, isPad && styles.volumeSliderPad]}
+                minimumValue={0}
+                maximumValue={1}
+                value={ttsVolume}
+                onValueChange={(value) => {
+                  setTtsVolume(value);
+                  if (value === 0) {
+                    stopSpeaking();
+                  }
+                }}
+                minimumTrackTintColor="#1e90ff"
+                maximumTrackTintColor="rgba(255,255,255,0.3)"
+                thumbTintColor="#1e90ff"
+              />
+            </View>
+            <TouchableOpacity
+              style={[styles.flipButton, isPad && styles.flipButtonPad]}
+              onPress={() => {
+                handleFirstInteraction();
+                setFacing(facing === 'back' ? 'front' : 'back');
+              }}
+            >
+              <Ionicons name="camera-reverse-outline" size={isPad ? 20 : 24} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Silent Mode Warning for iPhone */}
+        {showSilentModeWarning && Platform.OS === 'ios' && !Platform.isPad && (
+          <View style={styles.silentModeWarning}>
+            <Ionicons name="volume-mute" size={20} color="#ff6b6b" />
+            <Text style={styles.silentModeWarningText}>
+              Turn off Silent Mode (mute switch) to hear voice announcements
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowSilentModeWarning(false)}
+              style={styles.silentModeClose}
+            >
+              <Ionicons name="close" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Countdown Display Overlay */}
         {isRunning && countdown !== null && (
           <View style={styles.countdownOverlay}>
             <Text style={styles.countdownDisplayLarge}>{countdown}</Text>
           </View>
+        )}
+
+        {/* Capture Flash Overlay */}
+        {flashVisible && (
+          <View style={styles.flashOverlay} />
         )}
 
         {/* Recording Indicator */}
@@ -332,55 +534,69 @@ export default function App() {
       </CameraView>
       
       {/* Bottom Controls */}
-      <View style={styles.bottomControls}>
+      <View style={[styles.bottomControls, isPad && styles.bottomControlsPad]}>
         {/* Mode Selector */}
-        <View style={styles.modeContainer}>
+        <View style={[styles.modeContainer, isPad && styles.modeContainerPad]}>
           <TouchableOpacity
             style={[styles.modeTab, mode === 'photo' && styles.modeTabActive]}
-            onPress={() => setMode('photo')}
+            onPress={() => {
+              handleFirstInteraction();
+              setMode('photo');
+            }}
           >
             <Ionicons 
               name="camera" 
-              size={24} 
+              size={isPad ? 20 : 24} 
               color={mode === 'photo' ? '#1e90ff' : 'rgba(255,255,255,0.6)'} 
             />
-            <Text style={[styles.modeTabText, mode === 'photo' && styles.modeTabTextActive]}>
+            <Text style={[styles.modeTabText, mode === 'photo' && styles.modeTabTextActive, isPad && styles.modeTabTextPad]}>
               Photo
             </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
             style={[styles.modeTab, mode === 'video' && styles.modeTabActive]}
-            onPress={() => setMode('video')}
+            onPress={() => {
+              handleFirstInteraction();
+              setMode('video');
+            }}
           >
             <Ionicons 
               name="videocam" 
-              size={24} 
+              size={isPad ? 20 : 24} 
               color={mode === 'video' ? '#1e90ff' : 'rgba(255,255,255,0.6)'} 
             />
-            <Text style={[styles.modeTabText, mode === 'video' && styles.modeTabTextActive]}>
+            <Text style={[styles.modeTabText, mode === 'video' && styles.modeTabTextActive, isPad && styles.modeTabTextPad]}>
               Video
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Timer Options - Available for both photo and video modes */}
-        <View style={styles.timerOptions}>
-          <Text style={styles.timerLabel}>Timer:</Text>
+        <View style={[styles.timerOptions, isPad && styles.timerOptionsPad]}>
+          <Text style={[styles.timerLabel, isPad && styles.timerLabelPad]}>Timer:</Text>
           {[3, 5, 10, 20].map((sec) => (
             <TouchableOpacity
               key={sec}
               style={[
                 styles.timerButton,
                 selectedSeconds === sec && styles.timerButtonSelected,
+                isPad && styles.timerButtonPad,
               ]}
-              onPress={() => setSelectedSeconds(sec)}
-              onLongPress={() => handleQuickTimer(sec)}
+              onPress={() => {
+                handleFirstInteraction();
+                setSelectedSeconds(sec);
+              }}
+              onLongPress={() => {
+                handleFirstInteraction();
+                handleQuickTimer(sec);
+              }}
               disabled={isRunning || isRecording}
             >
               <Text style={[
                 styles.timerText,
-                selectedSeconds === sec && styles.timerTextSelected
+                selectedSeconds === sec && styles.timerTextSelected,
+                isPad && styles.timerTextPad
               ]}>
                 {sec}s
               </Text>
@@ -393,8 +609,11 @@ export default function App() {
           {/* Capture/Record Button */}
           {mode === 'photo' ? (
             <TouchableOpacity
-              style={[styles.captureButton, isRunning && styles.disabled]}
-              onPress={startCountdown}
+              style={[styles.captureButton, isRunning && styles.disabled, isPad && styles.captureButtonPad]}
+              onPress={() => {
+                handleFirstInteraction();
+                startCountdown();
+              }}
               disabled={isRunning}
             >
               <View style={styles.captureButtonInner}>
@@ -403,8 +622,11 @@ export default function App() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.captureButton, styles.videoButton, isRunning && styles.disabled]}
-              onPress={isRecording ? stopVideoRecording : startCountdown}
+              style={[styles.captureButton, styles.videoButton, isRunning && styles.disabled, isPad && styles.captureButtonPad]}
+              onPress={() => {
+                handleFirstInteraction();
+                isRecording ? stopVideoRecording() : startCountdown();
+              }}
               disabled={isRunning}
             >
               <View style={[
@@ -459,6 +681,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(30,144,255,0.5)',
   },
+  ttsToggle: {
+    padding: 12,
+    backgroundColor: 'rgba(30,144,255,0.08)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(30,144,255,0.3)',
+    marginRight: 8,
+  },
   modeContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -478,6 +708,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 25,
     marginHorizontal: 2,
+  },
+  modeTabPad: {
+    paddingVertical: 8,
+    paddingHorizontal: 15,
   },
   modeTabActive: {
     backgroundColor: 'rgba(30,144,255,0.3)',
@@ -500,6 +734,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  flashOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'white',
+    opacity: 0.8,
   },
   countdownDisplayLarge: {
     fontSize: 160,
@@ -653,5 +896,102 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  // Volume control styles
+  topControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  volumeControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(30,144,255,0.08)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(30,144,255,0.3)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginRight: 8,
+  },
+  volumeIcon: {
+    marginRight: 8,
+  },
+  volumeSlider: {
+    width: 100,
+    height: 40,
+  },
+  // Silent mode warning
+  silentModeWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,107,107,0.9)',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    marginHorizontal: 20,
+    marginTop: 10,
+    borderRadius: 10,
+  },
+  silentModeWarningText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+    marginLeft: 10,
+  },
+  silentModeClose: {
+    padding: 5,
+  },
+  // iPad specific styles - more compact
+  topHeaderPad: {
+    paddingTop: 35,
+    paddingHorizontal: 12,
+    paddingBottom: 5,
+  },
+  appTitlePad: {
+    fontSize: 18,
+  },
+  volumeControlPad: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  volumeSliderPad: {
+    width: 70,
+    height: 30,
+  },
+  flipButtonPad: {
+    padding: 8,
+  },
+  bottomControlsPad: {
+    paddingBottom: 15,
+    paddingTop: 10,
+  },
+  modeContainerPad: {
+    padding: 3,
+    marginBottom: 8,
+    marginHorizontal: 120,
+  },
+  modeTabTextPad: {
+    fontSize: 11,
+  },
+  timerOptionsPad: {
+    marginBottom: 10,
+    paddingVertical: 6,
+    marginHorizontal: 80,
+  },
+  timerLabelPad: {
+    fontSize: 12,
+  },
+  timerButtonPad: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  timerTextPad: {
+    fontSize: 11,
+  },
+  captureButtonPad: {
+    width: 55,
+    height: 55,
+    borderRadius: 27.5,
+    borderWidth: 2,
   },
 });
