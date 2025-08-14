@@ -1,0 +1,97 @@
+import React from 'react';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { styles } from '../styles';
+
+const isPad = Platform.OS === 'ios' && Platform.isPad;
+
+const CameraControls = ({
+  mode,
+  setMode,
+  handleFirstInteraction,
+  isRecording,
+  isRunning,
+  startCountdown,
+  stopVideoRecording,
+  countdown,
+}) => {
+  return (
+    <View style={[styles.bottomControls, isPad && styles.bottomControlsPad]}>
+      {/* Mode Selector */}
+      <View style={[styles.modeContainer, isPad && styles.modeContainerPad]}>
+        <TouchableOpacity
+          style={[styles.modeTab, mode === 'photo' && styles.modeTabActive]}
+          onPress={() => {
+            handleFirstInteraction();
+            setMode('photo');
+          }}
+        >
+          <Ionicons
+            name="camera"
+            size={isPad ? 20 : 24}
+            color={mode === 'photo' ? '#1e90ff' : 'rgba(255,255,255,0.6)'}
+          />
+          <Text style={[styles.modeTabText, mode === 'photo' && styles.modeTabTextActive, isPad && styles.modeTabTextPad]}>
+            Photo
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.modeTab, mode === 'video' && styles.modeTabActive]}
+          onPress={() => {
+            handleFirstInteraction();
+            setMode('video');
+          }}
+        >
+          <Ionicons
+            name="videocam"
+            size={isPad ? 20 : 24}
+            color={mode === 'video' ? '#1e90ff' : 'rgba(255,255,255,0.6)'}
+          />
+          <Text style={[styles.modeTabText, mode === 'video' && styles.modeTabTextActive, isPad && styles.modeTabTextPad]}>
+            Video
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Main Action Button - Center Only */}
+      <View style={styles.actionButtons}>
+        {/* Capture/Record Button */}
+        {mode === 'photo' ? (
+          <TouchableOpacity
+            style={[styles.captureButton, isRunning && styles.disabled, isPad && styles.captureButtonPad]}
+            onPress={() => {
+              handleFirstInteraction();
+              startCountdown();
+            }}
+            disabled={isRunning}
+          >
+            <View style={styles.captureButtonInner}>
+              {isRunning && <Text style={styles.captureCountdown}>{countdown}</Text>}
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.captureButton, styles.videoButton, isRunning && styles.disabled, isPad && styles.captureButtonPad]}
+            onPress={() => {
+              handleFirstInteraction();
+              isRecording ? stopVideoRecording() : startCountdown();
+            }}
+            disabled={isRunning}
+          >
+            <View style={[
+              styles.videoButtonInner,
+              isRecording && styles.videoButtonRecording
+            ]}>
+              {isRunning && !isRecording && (
+                <Text style={styles.videoCountdown}>{countdown}</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+};
+
+export default CameraControls;
