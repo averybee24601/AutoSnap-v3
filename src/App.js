@@ -52,12 +52,6 @@ export default function App() {
     handleQuickTimer,
   } = useCountdown(speak, takePicture, startVideoRecording, mode);
 
-  // Ensure welcome TTS triggers once the app has camera permission and TTS is ready
-  useEffect(() => {
-    if (permission?.granted && ttsReady) {
-      handleFirstInteraction();
-    }
-  }, [permission?.granted, ttsReady, handleFirstInteraction]);
 
   const viewLastMedia = async () => {
     if (lastMediaUri) {
