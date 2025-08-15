@@ -57,101 +57,111 @@ export default function App() {
 
 
   const viewLastMedia = async () => {
-    if (lastMediaUri) {
-      try {
+    try {
+      if (lastMediaUri) {
         await Linking.openURL(lastMediaUri);
-      } catch (error) {
-        const { assets } = await MediaLibrary.getAssetsAsync({
-          first: 1,
-          sortBy: MediaLibrary.SortBy.creationTime,
-        });
-        
-        if (assets.length > 0) {
-          speak('Opening gallery');
-          Alert.alert('View Media', 'Please check your gallery app for the latest media.');
-        } else {
-          speak('No media found');
-        }
+        return;
       }
-    } else {
-      speak('No recent media to view');
+
+      const perm = await MediaLibrary.getPermissionsAsync();
+      const granted = perm?.granted || (await MediaLibrary.requestPermissionsAsync())?.granted;
+      if (!granted) {
+        speak('Grant gallery permission to view your media.');
+        return;
+      }
+
+      const { assets } = await MediaLibrary.getAssetsAsync({
+        first: 1,
+        sortBy: MediaLibrary.SortBy.creationTime,
+      });
+
+      if (assets.length > 0) {
+        speak('Opening gallery');
+        Alert.alert('View Media', 'Please check your gallery app for the latest media.');
+      } else {
+        speak('No media found');
+      }
+    } catch (error) {
+      speak('Unable to open media.');
     }
   };
 
-  if (!permission) {
-    return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.text}>Loading...</Text>
-      </View>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.text}>We need your permission to show the camera</Text>
-        <TouchableOpacity style={styles.captureButton} onPress={requestPermission}>
-          <Text style={styles.captureText}>Grant Permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <CameraView
-        style={styles.camera}
-        facing={facing}
-        ref={cameraRef}
-        mode={mode}
-      >
-        <Header
-          ttsVolume={ttsVolume}
-          setTtsVolume={setTtsVolume}
-          stopSpeaking={stopSpeaking}
-          handleFirstInteraction={handleFirstInteraction}
+      {(permission && permission.granted) ? (
+        <CameraView
+          style={styles.camera}
           facing={facing}
-          setFacing={setFacing}
-        />
+          ref={cameraRef}
+          mode={mode}
+        >
+          <Header
+            ttsVolume={ttsVolume}
+            setTtsVolume={setTtsVolume}
+            stopSpeaking={stopSpeaking}
+            handleFirstInteraction={handleFirstInteraction}
+            facing={facing}
+            setFacing={setFacing}
+          />
 
-        {showSilentModeWarning && Platform.OS === 'ios' && !isPad && (
-          <View style={styles.silentModeWarning}>
-            <Ionicons name="volume-mute" size={20} color="#ff6b6b" />
-            <Text style={styles.silentModeWarningText}>
-              Turn off Silent Mode (mute switch) to hear voice announcements
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowSilentModeWarning(false)}
-              style={styles.silentModeClose}
-            >
-              <Ionicons name="close" size={20} color="white" />
+          {showSilentModeWarning && Platform.OS === 'ios' && !isPad && (
+            <View style={styles.silentModeWarning}>
+              <Ionicons name="volume-mute" size={20} color="#ff6b6b" />
+              <Text style={styles.silentModeWarningText}>
+                Turn off Silent Mode (mute switch) to hear voice announcements
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowSilentModeWarning(false)}
+                style={styles.silentModeClose}
+              >
+                <Ionicons name="close" size={20} color="white" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {needsInteraction && (
+            <View pointerEvents="none" style={styles.interactionPrompt}>
+              <Text style={styles.interactionPromptText}>Press any button to start</Text>
+            </View>
+          )}
+
+          {isRunning && countdown !== null && (
+            <View pointerEvents="none" style={styles.countdownOverlay}>
+              <Text style={styles.countdownDisplayLarge}>{countdown}</Text>
+            </View>
+          )}
+
+          {flashVisible && (
+            <View pointerEvents="none" style={styles.flashOverlay} />
+          )}
+
+          {isRecording && (
+            <View pointerEvents="none" style={styles.recordingIndicator}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>Recording...</Text>
+            </View>
+          )}
+        </CameraView>
+      ) : (
+        <View style={styles.camera}>
+          <Header
+            ttsVolume={ttsVolume}
+            setTtsVolume={setTtsVolume}
+            stopSpeaking={stopSpeaking}
+            handleFirstInteraction={handleFirstInteraction}
+            facing={facing}
+            setFacing={setFacing}
+          />
+
+          <View style={styles.cameraPlaceholder}>
+            <Text style={styles.cameraPlaceholderTitle}>Welcome to AutoSnap</Text>
+            <Text style={styles.cameraPlaceholderSubtitle}>Grant camera permission to continue</Text>
+            <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+              <Text style={styles.permissionButtonText}>Grant Permission</Text>
             </TouchableOpacity>
           </View>
-        )}
-
-        {needsInteraction && (
-          <View style={styles.interactionPrompt}>
-            <Text style={styles.interactionPromptText}>Press any button to start</Text>
-          </View>
-        )}
-
-        {isRunning && countdown !== null && (
-          <View style={styles.countdownOverlay}>
-            <Text style={styles.countdownDisplayLarge}>{countdown}</Text>
-          </View>
-        )}
-
-        {flashVisible && (
-          <View style={styles.flashOverlay} />
-        )}
-
-        {isRecording && (
-          <View style={styles.recordingIndicator}>
-            <View style={styles.recordingDot} />
-            <Text style={styles.recordingText}>Recording...</Text>
-          </View>
-        )}
-      </CameraView>
+        </View>
+      )}
       
       <Timer
         selectedSeconds={selectedSeconds}
@@ -173,6 +183,7 @@ export default function App() {
         countdown={countdown}
         skipWelcome={skipWelcome}
         setSkipWelcome={setSkipWelcome}
+        controlsDisabled={!permission || !permission.granted}
       />
     </View>
   );

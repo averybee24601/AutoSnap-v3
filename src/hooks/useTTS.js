@@ -3,7 +3,6 @@ import { Platform, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
-import * as MediaLibrary from 'expo-media-library';
 
 export const useTTS = () => {
   const [ttsVolume, setTtsVolume] = useState(1.0);
@@ -135,8 +134,7 @@ export const useTTS = () => {
           }
         } catch {}
 
-        await MediaLibrary.requestPermissionsAsync();
-        await Audio.requestPermissionsAsync();
+        // No explicit permission requests needed for TTS
         
         if (Platform.OS === 'ios') {
           await Audio.setAudioModeAsync({

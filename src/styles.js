@@ -16,6 +16,34 @@ export const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
+  cameraPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000',
+  },
+  cameraPlaceholderTitle: {
+    color: '#1e90ff',
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  cameraPlaceholderSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  permissionButton: {
+    backgroundColor: '#1e90ff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+  },
+  permissionButtonText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 16,
+  },
   topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

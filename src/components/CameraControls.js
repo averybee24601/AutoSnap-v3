@@ -16,6 +16,7 @@ const CameraControls = ({
   countdown,
   skipWelcome,
   setSkipWelcome,
+  controlsDisabled,
 }) => {
   return (
     <View style={[styles.bottomControls, isPad && styles.bottomControlsPad]}>
@@ -41,11 +42,12 @@ const CameraControls = ({
       {/* Mode Selector */}
       <View style={[styles.modeContainer, isPad && styles.modeContainerPad]}>
         <TouchableOpacity
-          style={[styles.modeTab, mode === 'photo' && styles.modeTabActive]}
+          style={[styles.modeTab, mode === 'photo' && styles.modeTabActive, controlsDisabled && styles.disabled]}
           onPress={() => {
             handleFirstInteraction();
             setMode('photo');
           }}
+          disabled={controlsDisabled}
         >
           <Ionicons
             name="camera"
@@ -58,11 +60,12 @@ const CameraControls = ({
         </TouchableOpacity>
         
         <TouchableOpacity
-          style={[styles.modeTab, mode === 'video' && styles.modeTabActive]}
+          style={[styles.modeTab, mode === 'video' && styles.modeTabActive, controlsDisabled && styles.disabled]}
           onPress={() => {
             handleFirstInteraction();
             setMode('video');
           }}
+          disabled={controlsDisabled}
         >
           <Ionicons
             name="videocam"
@@ -80,12 +83,12 @@ const CameraControls = ({
         {/* Capture/Record Button */}
         {mode === 'photo' ? (
           <TouchableOpacity
-            style={[styles.captureButton, isRunning && styles.disabled, isPad && styles.captureButtonPad]}
+            style={[styles.captureButton, (isRunning || controlsDisabled) && styles.disabled, isPad && styles.captureButtonPad]}
             onPress={() => {
               handleFirstInteraction();
               startCountdown();
             }}
-            disabled={isRunning}
+            disabled={isRunning || controlsDisabled}
           >
             <View style={styles.captureButtonInner}>
               {isRunning && <Text style={styles.captureCountdown}>{countdown}</Text>}
@@ -93,12 +96,12 @@ const CameraControls = ({
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.captureButton, styles.videoButton, isRunning && styles.disabled, isPad && styles.captureButtonPad]}
+            style={[styles.captureButton, styles.videoButton, (isRunning || controlsDisabled) && styles.disabled, isPad && styles.captureButtonPad]}
             onPress={() => {
               handleFirstInteraction();
               isRecording ? stopVideoRecording() : startCountdown();
             }}
-            disabled={isRunning}
+            disabled={isRunning || controlsDisabled}
           >
             <View style={[
               styles.videoButtonInner,
