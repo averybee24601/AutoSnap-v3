@@ -28,6 +28,9 @@ export default function App() {
     speak,
     stopSpeaking,
     handleFirstInteraction,
+    skipWelcome,
+    setSkipWelcome,
+    needsInteraction,
   } = useTTS();
 
   const {
@@ -126,6 +129,12 @@ export default function App() {
           </View>
         )}
 
+        {needsInteraction && (
+          <View style={styles.interactionPrompt}>
+            <Text style={styles.interactionPromptText}>Press any button to start</Text>
+          </View>
+        )}
+
         {isRunning && countdown !== null && (
           <View style={styles.countdownOverlay}>
             <Text style={styles.countdownDisplayLarge}>{countdown}</Text>
@@ -162,6 +171,8 @@ export default function App() {
         startCountdown={startCountdown}
         stopVideoRecording={stopVideoRecording}
         countdown={countdown}
+        skipWelcome={skipWelcome}
+        setSkipWelcome={setSkipWelcome}
       />
     </View>
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Platform, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import * as MediaLibrary from 'expo-media-library';
@@ -9,6 +10,75 @@ export const useTTS = () => {
   const [ttsReady, setTtsReady] = useState(false);
   const [showSilentModeWarning, setShowSilentModeWarning] = useState(false);
   const hasSpokenWelcome = useRef(false);
+  const [skipWelcome, setSkipWelcome] = useState(false);
+  const isWelcomeSpeakingRef = useRef(false);
+  const [needsInteraction, setNeedsInteraction] = useState(false);
+  const ttsVolumeRef = useRef(ttsVolume);
+
+  useEffect(() => {
+    ttsVolumeRef.current = ttsVolume;
+  }, [ttsVolume]);
+
+  const playWelcomeSequence = useCallback((autoplay = false) => {
+    try {
+      const chunks = [
+        'Welcome to AutoSnap.',
+        'Set a timer using the buttons at the bottom, then press the capture button to start the countdown.',
+        'I will count down and announce when your photo or video is captured.'
+      ];
+      isWelcomeSpeakingRef.current = true;
+      let index = 0;
+
+      const speakNext = () => {
+        if (index >= chunks.length) {
+          isWelcomeSpeakingRef.current = false;
+          return;
+        }
+        const text = chunks[index];
+        try {
+          Speech.stop();
+          Speech.speak(text, {
+            language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
+            pitch: 1,
+            rate: Platform.OS === 'ios' ? 0.5 : 0.8,
+            volume: ttsVolumeRef.current ?? 1.0,
+            onStart: () => {
+              if (index === 0) {
+                hasSpokenWelcome.current = true;
+                setNeedsInteraction(false);
+              }
+            },
+            onDone: () => {
+              index += 1;
+              speakNext();
+            },
+            onStopped: () => {
+              // Interrupted (e.g., countdown). Do not continue.
+              isWelcomeSpeakingRef.current = false;
+            },
+            onError: () => {
+              isWelcomeSpeakingRef.current = false;
+              if (autoplay && index === 0) {
+                hasSpokenWelcome.current = false;
+                setNeedsInteraction(true);
+              }
+            },
+          });
+        } catch {
+          isWelcomeSpeakingRef.current = false;
+          if (autoplay && index === 0) {
+            setNeedsInteraction(true);
+          }
+        }
+      };
+
+      speakNext();
+    } catch (e) {
+      if (autoplay) {
+        setNeedsInteraction(true);
+      }
+    }
+  }, [setNeedsInteraction]);
 
   const stopSpeaking = async () => {
     try {
@@ -57,6 +127,14 @@ export const useTTS = () => {
     const initializeTTSSystem = async () => {
       console.log('Starting TTS system initialization...');
       try {
+        // Load persisted prefs
+        try {
+          const persistedSkip = await AsyncStorage.getItem('autosnap_skip_welcome');
+          if (persistedSkip != null) {
+            setSkipWelcome(persistedSkip === 'true');
+          }
+        } catch {}
+
         await MediaLibrary.requestPermissionsAsync();
         await Audio.requestPermissionsAsync();
         
@@ -101,9 +179,34 @@ export const useTTS = () => {
   }, []);
 
 
+  // Attempt autoplay of welcome when ready, respecting skip and platform limitations
+  useEffect(() => {
+    if (!ttsReady) return;
+    if (hasSpokenWelcome.current) return;
+    if (skipWelcome) {
+      hasSpokenWelcome.current = true;
+      return;
+    }
+
+    // Try to autoplay; if platform blocks, show prompt handled in onError
+    playWelcomeSequence(true);
+  }, [ttsReady, skipWelcome, ttsVolume, playWelcomeSequence]);
+
+  // Persist skipWelcome preference
+  useEffect(() => {
+    AsyncStorage.setItem('autosnap_skip_welcome', String(skipWelcome)).catch(() => {});
+  }, [skipWelcome]);
+
   const handleFirstInteraction = useCallback(async () => {
     // Ensure this logic runs only once
     if (hasSpokenWelcome.current) {
+      setNeedsInteraction(false);
+      return;
+    }
+
+    // Respect skip setting: mark as spoken and bail out
+    if (skipWelcome) {
+      hasSpokenWelcome.current = true;
       return;
     }
 
@@ -136,20 +239,12 @@ export const useTTS = () => {
     }
 
     // Now, proceed with the welcome message if TTS is ready and volume is up
-    if (ttsReady && ttsVolume > 0) {
-      hasSpokenWelcome.current = true;
-      const welcomeMessage = 'Welcome to AutoSnap. Set a timer using the buttons at the bottom, then press the capture button to start the countdown. I will count down and announce when your photo or video is captured.';
-      speakDirect(welcomeMessage, {
-        onError: (error) => {
-          console.error('TTS welcome error after first interaction:', error);
-          hasSpokenWelcome.current = false; // Allow retry if it fails
-          if (Platform.OS === 'ios' && error.message?.includes('AVAudioSession')) {
-            setShowSilentModeWarning(true);
-          }
-        },
-      });
+    if (ttsReady && ttsVolume > 0 && !skipWelcome) {
+      playWelcomeSequence(false);
+    } else {
+      setNeedsInteraction(false);
     }
-  }, [ttsReady, ttsVolume]); // Removed hasSpokenWelcome.current from deps as it's a ref
+  }, [ttsReady, ttsVolume, skipWelcome]); // Removed hasSpokenWelcome.current from deps as it's a ref
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
@@ -163,6 +258,15 @@ export const useTTS = () => {
     };
   }, []);
 
+  // If user decides to skip while the welcome is speaking, stop only that speech
+  useEffect(() => {
+    if (skipWelcome && isWelcomeSpeakingRef.current) {
+      stopSpeaking();
+      isWelcomeSpeakingRef.current = false;
+      hasSpokenWelcome.current = true;
+    }
+  }, [skipWelcome]);
+
   return {
     ttsVolume,
     setTtsVolume,
@@ -172,5 +276,9 @@ export const useTTS = () => {
     speak,
     stopSpeaking,
     handleFirstInteraction,
+    skipWelcome,
+    setSkipWelcome,
+    needsInteraction,
+    setNeedsInteraction,
   };
 };

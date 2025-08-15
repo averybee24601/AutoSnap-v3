@@ -14,9 +14,29 @@ const CameraControls = ({
   startCountdown,
   stopVideoRecording,
   countdown,
+  skipWelcome,
+  setSkipWelcome,
 }) => {
   return (
     <View style={[styles.bottomControls, isPad && styles.bottomControlsPad]}>
+      {/* Bottom-left: Skip welcome checkbox */}
+      <View style={styles.skipWelcomeRow}>
+        <TouchableOpacity
+          style={[styles.checkboxBase, skipWelcome && styles.checkboxChecked]}
+          onPress={() => {
+            handleFirstInteraction();
+            setSkipWelcome(!skipWelcome);
+          }}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: skipWelcome }}
+          accessibilityLabel="Skip welcome message"
+        >
+          {skipWelcome && (
+            <Ionicons name="checkmark" size={14} color="#0b5ed7" />
+          )}
+        </TouchableOpacity>
+        <Text style={styles.skipWelcomeText}>Skip welcome message</Text>
+      </View>
       {/* Mode Selector */}
       <View style={[styles.modeContainer, isPad && styles.modeContainerPad]}>
         <TouchableOpacity

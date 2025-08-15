@@ -141,6 +141,33 @@ export const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(30,144,255,0.3)',
   },
+  skipWelcomeRow: {
+    position: 'absolute',
+    left: 16,
+    bottom: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    opacity: 0.9,
+  },
+  checkboxBase: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  checkboxChecked: {
+    borderColor: '#0b5ed7',
+    backgroundColor: 'rgba(11,94,215,0.15)',
+  },
+  skipWelcomeText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+  },
   timerOptions: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -297,6 +324,21 @@ export const styles = StyleSheet.create({
   },
   silentModeClose: {
     padding: 5,
+  },
+  interactionPrompt: {
+    marginTop: 10,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(30,144,255,0.15)',
+    borderColor: 'rgba(30,144,255,0.4)',
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+  },
+  interactionPromptText: {
+    color: '#1e90ff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   // iPad specific styles - more compact
   topHeaderPad: {

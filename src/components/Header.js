@@ -16,9 +16,6 @@ const Header = ({ ttsVolume, setTtsVolume, stopSpeaking, handleFirstInteraction,
             onPress={() => {
               const newVolume = ttsVolume > 0 ? 0 : 1.0;
               setTtsVolume(newVolume);
-              if (newVolume === 0) {
-                stopSpeaking();
-              }
               handleFirstInteraction();
             }}
             style={styles.volumeIcon}
@@ -36,9 +33,6 @@ const Header = ({ ttsVolume, setTtsVolume, stopSpeaking, handleFirstInteraction,
             value={ttsVolume}
             onValueChange={(value) => {
               setTtsVolume(value);
-              if (value === 0) {
-                stopSpeaking();
-              }
             }}
             minimumTrackTintColor="#1e90ff"
             maximumTrackTintColor="rgba(255,255,255,0.3)"
