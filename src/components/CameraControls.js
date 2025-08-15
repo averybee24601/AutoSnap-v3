@@ -32,7 +32,7 @@ const CameraControls = ({
           accessibilityLabel="Skip welcome message"
         >
           {skipWelcome && (
-            <Ionicons name="checkmark" size={14} color="#0b5ed7" />
+            <Ionicons name="checkmark" size={18} color="#0b5ed7" />
           )}
         </TouchableOpacity>
         <Text style={styles.skipWelcomeText}>Skip welcome message</Text>

@@ -31,9 +31,8 @@ const Header = ({ ttsVolume, setTtsVolume, stopSpeaking, handleFirstInteraction,
             minimumValue={0}
             maximumValue={1}
             value={ttsVolume}
-            onValueChange={(value) => {
-              setTtsVolume(value);
-            }}
+            onValueChange={(value) => setTtsVolume(value)}
+            onSlidingComplete={(value) => setTtsVolume(value)}
             minimumTrackTintColor="#1e90ff"
             maximumTrackTintColor="rgba(255,255,255,0.3)"
             thumbTintColor="#1e90ff"

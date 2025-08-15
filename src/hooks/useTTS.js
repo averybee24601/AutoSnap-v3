@@ -94,7 +94,7 @@ export const useTTS = () => {
         language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
         pitch: 1,
         rate: Platform.OS === 'ios' ? 0.5 : 0.8,
-        volume: ttsVolume,
+        volume: ttsVolumeRef.current ?? 1.0,
         ...options,
       });
       console.log('Speech.speak called successfully');
@@ -104,8 +104,8 @@ export const useTTS = () => {
   };
 
   const speak = useCallback((text, options = {}) => {
-    console.log(`speak called, volume: ${ttsVolume}, text: "${text}"`);
-    if (ttsVolume === 0) {
+    console.log(`speak called, volume: ${ttsVolumeRef.current}, text: "${text}"`);
+    if ((ttsVolumeRef.current ?? 0) === 0) {
       console.log('TTS volume is 0, not speaking');
       return;
     }
@@ -115,13 +115,13 @@ export const useTTS = () => {
         language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
         pitch: 1,
         rate: Platform.OS === 'ios' ? 0.5 : 0.8,
-        volume: ttsVolume,
+        volume: ttsVolumeRef.current ?? 1.0,
         ...options,
       });
     } catch (error) {
       console.error('Error in speak:', error);
     }
-  }, [ttsVolume]);
+  }, []);
 
   useEffect(() => {
     const initializeTTSSystem = async () => {
@@ -190,7 +190,7 @@ export const useTTS = () => {
 
     // Try to autoplay; if platform blocks, show prompt handled in onError
     playWelcomeSequence(true);
-  }, [ttsReady, skipWelcome, ttsVolume, playWelcomeSequence]);
+  }, [ttsReady, skipWelcome, playWelcomeSequence]);
 
   // Persist skipWelcome preference
   useEffect(() => {
