@@ -26,7 +26,7 @@ export const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
   },
   appTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1e90ff',
     letterSpacing: 1,
@@ -142,11 +142,11 @@ export const styles = StyleSheet.create({
     borderTopColor: 'rgba(30,144,255,0.3)',
   },
   skipWelcomeRow: {
-    position: 'absolute',
-    left: 16,
-    bottom: 32,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 10,
     opacity: 0.9,
   },
   checkboxBase: {
@@ -166,7 +166,7 @@ export const styles = StyleSheet.create({
   },
   skipWelcomeText: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
+    fontSize: 12,
   },
   timerOptions: {
     flexDirection: 'row',

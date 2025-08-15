@@ -89,7 +89,7 @@ export const useTTS = () => {
   const speakDirect = (text, options = {}) => {
     console.log(`speakDirect called with: "${text}"`);
     try {
-      Speech.stop();
+      // Do not preemptively stop; allow natural completion to avoid cutting countdown/welcome
       Speech.speak(text, {
         language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
         pitch: 1,
@@ -110,7 +110,7 @@ export const useTTS = () => {
       return;
     }
     try {
-      Speech.stop();
+      // Avoid cutting current speech (e.g., welcome or countdown). Let Expo TTS queue it.
       Speech.speak(text, {
         language: Platform.OS === 'ios' ? 'en-US' : 'en_US',
         pitch: 1,
@@ -226,10 +226,10 @@ export const useTTS = () => {
         console.log('Audio mode re-configured successfully for mobile iOS.');
 
         // Perform a priming speak call, which is often needed after setting audio mode
+        // Do not call stop() right after to avoid cutting queued speech
         await Speech.speak('', { volume: 0.01, rate: 10 });
         await new Promise(resolve => setTimeout(resolve, 100));
         await Speech.speak(' ', { volume: 0.1, rate: 1, language: 'en-US' });
-        await Speech.stop();
         console.log('TTS Primed for mobile iOS.');
       } catch (error) {
         console.error('Error during mobile iOS audio re-configuration or priming:', error);

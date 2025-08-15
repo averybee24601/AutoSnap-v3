@@ -9,6 +9,7 @@ export const useCountdown = (speak, takePicture, startVideoRecording, mode) => {
   useEffect(() => {
     let timer = null;
     if (isRunning && countdown > 0) {
+      // Queue countdown numbers without interrupting previous speech
       speak(String(countdown));
       timer = setTimeout(() => {
         setCountdown(countdown - 1);

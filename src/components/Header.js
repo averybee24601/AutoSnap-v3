@@ -9,7 +9,7 @@ const isPad = Platform.OS === 'ios' && Platform.isPad;
 const Header = ({ ttsVolume, setTtsVolume, stopSpeaking, handleFirstInteraction, facing, setFacing }) => {
   return (
     <View style={[styles.topHeader, isPad && styles.topHeaderPad]}>
-      <Text style={[styles.appTitle, isPad && styles.appTitlePad]}>AutoSnap</Text>
+      <Text accessibilityRole="header" style={[styles.appTitle, isPad && styles.appTitlePad]}>AutoSnap</Text>
       <View style={styles.topControls}>
         <View style={[styles.volumeControl, isPad && styles.volumeControlPad]}>
           <TouchableOpacity
@@ -30,9 +30,15 @@ const Header = ({ ttsVolume, setTtsVolume, stopSpeaking, handleFirstInteraction,
             style={[styles.volumeSlider, isPad && styles.volumeSliderPad]}
             minimumValue={0}
             maximumValue={1}
+            step={0.05}
             value={ttsVolume}
-            onValueChange={(value) => setTtsVolume(value)}
-            onSlidingComplete={(value) => setTtsVolume(value)}
+            onValueChange={(value) => {
+              // Do not interrupt current speech; new volume applies to the next utterance
+              setTtsVolume(value);
+            }}
+            onSlidingComplete={(value) => {
+              setTtsVolume(value);
+            }}
             minimumTrackTintColor="#1e90ff"
             maximumTrackTintColor="rgba(255,255,255,0.3)"
             thumbTintColor="#1e90ff"
