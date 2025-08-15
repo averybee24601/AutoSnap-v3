@@ -258,7 +258,7 @@ export const useTTS = () => {
     };
   }, []);
 
-  // If user decides to skip while the welcome is speaking, stop only that speech
+  // If user decides to skip while the welcome/instructions are speaking, stop all TTS
   useEffect(() => {
     if (skipWelcome && isWelcomeSpeakingRef.current) {
       stopSpeaking();

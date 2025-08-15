@@ -25,7 +25,7 @@ const Timer = ({ selectedSeconds, setSelectedSeconds, handleFirstInteraction, ha
             handleFirstInteraction();
             handleQuickTimer(sec);
           }}
-          disabled={isRunning || isRecording}
+          disabled={isRecording}
         >
           <Text style={[
             styles.timerText,

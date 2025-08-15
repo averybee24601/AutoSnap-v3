@@ -53,7 +53,7 @@ export default function App() {
     isRunning,
     startCountdown,
     handleQuickTimer,
-  } = useCountdown(speak, takePicture, startVideoRecording, mode);
+  } = useCountdown(speak, stopSpeaking, takePicture, startVideoRecording, mode);
 
 
   const viewLastMedia = async () => {

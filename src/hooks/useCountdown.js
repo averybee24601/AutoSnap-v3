@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 
-export const useCountdown = (speak, takePicture, startVideoRecording, mode) => {
-  const [selectedSeconds, setSelectedSeconds] = useState(3);
+export const useCountdown = (speak, stopSpeaking, takePicture, startVideoRecording, mode) => {
+  const [selectedSecondsState, setSelectedSecondsState] = useState(3);
   const [countdown, setCountdown] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
 
@@ -32,20 +32,34 @@ export const useCountdown = (speak, takePicture, startVideoRecording, mode) => {
     return () => clearTimeout(timer);
   }, [isRunning, countdown, mode, speak, takePicture, startVideoRecording]);
 
-  const startCountdown = () => {
-    if (isRunning) return;
-    setCountdown(selectedSeconds);
+  const startCountdown = useCallback(() => {
+    // Interrupt any ongoing TTS (welcome, instructions, or other)
+    try { stopSpeaking && stopSpeaking(); } catch {}
+    setCountdown(selectedSecondsState);
     setIsRunning(true);
-  };
+  }, [selectedSecondsState, stopSpeaking]);
 
-  const handleQuickTimer = (seconds) => {
-    setSelectedSeconds(seconds);
+  const handleQuickTimer = useCallback((seconds) => {
+    try { stopSpeaking && stopSpeaking(); } catch {}
+    setSelectedSecondsState(seconds);
     speak(`Timer set to ${seconds} seconds`);
-    setTimeout(() => startCountdown(), 500);
-  };
+    // Interrupt current countdown and restart immediately with new seconds
+    setCountdown(seconds);
+    setIsRunning(true);
+  }, [speak, stopSpeaking]);
+
+  // Expose a setter that can interrupt a running countdown and TTS when changed mid-run
+  const setSelectedSeconds = useCallback((seconds) => {
+    setSelectedSecondsState(seconds);
+    if (isRunning) {
+      try { stopSpeaking && stopSpeaking(); } catch {}
+      setCountdown(seconds);
+      setIsRunning(true);
+    }
+  }, [isRunning, stopSpeaking]);
 
   return {
-    selectedSeconds,
+    selectedSeconds: selectedSecondsState,
     setSelectedSeconds,
     countdown,
     isRunning,
