@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 
 export const useCountdown = (speak, stopSpeaking, takePicture, startVideoRecording, mode) => {
-  const [selectedSecondsState, setSelectedSecondsState] = useState(3);
+  const [selectedSecondsState, setSelectedSecondsState] = useState(5);
   const [countdown, setCountdown] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
 

@@ -9,7 +9,7 @@ const Timer = ({ selectedSeconds, setSelectedSeconds, handleFirstInteraction, ha
   return (
     <View style={[styles.timerOptions, isPad && styles.timerOptionsPad]}>
       <Text style={[styles.timerLabel, isPad && styles.timerLabelPad]}>Timer:</Text>
-      {[3, 5, 10, 20].map((sec) => (
+      {[5, 10, 20, 30, 45, 60].map((sec) => (
         <TouchableOpacity
           key={sec}
           style={[
