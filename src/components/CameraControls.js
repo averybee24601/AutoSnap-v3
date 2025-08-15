@@ -24,12 +24,13 @@ const CameraControls = ({
       <TouchableOpacity
         style={styles.skipWelcomeRow}
         onPress={() => {
-          handleFirstInteraction();
+          // Set skip first so any subsequent logic respects it immediately
           setSkipWelcome(!skipWelcome);
+          handleFirstInteraction();
         }}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: skipWelcome }}
-        accessibilityLabel="Skip welcome message"
+        accessibilityLabel="Skip Intro Message"
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 16 }}
       >
         <View style={[styles.checkboxBase, skipWelcome && styles.checkboxChecked]}>
@@ -37,7 +38,7 @@ const CameraControls = ({
             <Ionicons name="checkmark" size={18} color="#0b5ed7" />
           )}
         </View>
-        <Text style={styles.skipWelcomeText}>Skip welcome message</Text>
+        <Text style={styles.skipWelcomeText}>Skip Intro Message</Text>
       </TouchableOpacity>
       {/* Mode Selector */}
       <View style={[styles.modeContainer, isPad && styles.modeContainerPad]}>

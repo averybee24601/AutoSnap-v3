@@ -11,6 +11,7 @@ export const useTTS = () => {
   const hasSpokenWelcome = useRef(false);
   const [skipWelcome, setSkipWelcome] = useState(false);
   const isWelcomeSpeakingRef = useRef(false);
+  const welcomeSequenceIdRef = useRef(0);
   const [needsInteraction, setNeedsInteraction] = useState(false);
   const ttsVolumeRef = useRef(ttsVolume);
 
@@ -27,8 +28,14 @@ export const useTTS = () => {
       ];
       isWelcomeSpeakingRef.current = true;
       let index = 0;
+      const sequenceId = ++welcomeSequenceIdRef.current;
 
       const speakNext = () => {
+        // Abort if a newer sequence has started or skip was toggled
+        if (welcomeSequenceIdRef.current !== sequenceId) {
+          isWelcomeSpeakingRef.current = false;
+          return;
+        }
         if (index >= chunks.length) {
           isWelcomeSpeakingRef.current = false;
           return;
@@ -48,6 +55,11 @@ export const useTTS = () => {
               }
             },
             onDone: () => {
+              // Abort if sequence invalidated
+              if (welcomeSequenceIdRef.current !== sequenceId) {
+                isWelcomeSpeakingRef.current = false;
+                return;
+              }
               index += 1;
               speakNext();
             },
@@ -256,12 +268,15 @@ export const useTTS = () => {
     };
   }, []);
 
-  // If user decides to skip while the welcome/instructions are speaking, stop all TTS
+  // If user toggles skip at any time, stop any ongoing TTS immediately and mark welcome as handled
   useEffect(() => {
-    if (skipWelcome && isWelcomeSpeakingRef.current) {
+    if (skipWelcome) {
+      // Invalidate any in-flight welcome sequence so recursion cannot continue
+      welcomeSequenceIdRef.current += 1;
       stopSpeaking();
       isWelcomeSpeakingRef.current = false;
       hasSpokenWelcome.current = true;
+      setNeedsInteraction(false);
     }
   }, [skipWelcome]);
 
